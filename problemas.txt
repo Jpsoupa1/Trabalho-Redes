@@ -1,0 +1,7 @@
+PROBLEMA 1 - IP fixo não era aplicado
+Sintoma: a interface continuava com IP dinâmico (192.168.56.101) mesmo
+após editar o netplan.
+Causa: erro de digitação no arquivo YAML — a interface estava escrita
+como "ensp0s8" (com um "s" a mais) em vez de "enp0s8".
+Solução: comparamos o nome no arquivo com o nome real exibido no "ip a"
+e corrigimos a letra. Após "netplan apply", o IP 192.168.56.10 foi aplicado.

@@ -1,0 +1,17 @@
+# FASE 1 - Configuração de rede
+ip a
+sudo nano /etc/netplan/00-cloud-init.yaml
+sudo netplan apply
+ping -c 4 192.168.56.10
+
+# FASE 2 - Instalação e configuração do vsftpd
+sudo apt update
+sudo apt install vsftpd -y
+sudo systemctl status vsftpd
+sudo adduser usuarioftp
+sudo mkdir -p /home/usuarioftp/arquivos
+sudo chown -R usuarioftp:usuarioftp /home/usuarioftp/arquivos
+sudo cp /etc/vsftpd.conf /etc/vsftpd.conf.bak
+sudo nano /etc/vsftpd.conf
+sudo systemctl restart vsftpd
+id usuarioftp
