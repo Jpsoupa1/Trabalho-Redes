@@ -1,7 +1,221 @@
-PROBLEMA 1 - IP fixo não era aplicado
-Sintoma: a interface continuava com IP dinâmico (192.168.56.101) mesmo
-após editar o netplan.
-Causa: erro de digitação no arquivo YAML — a interface estava escrita
-como "ensp0s8" (com um "s" a mais) em vez de "enp0s8".
-Solução: comparamos o nome no arquivo com o nome real exibido no "ip a"
-e corrigimos a letra. Após "netplan apply", o IP 192.168.56.10 foi aplicado.
+================================================================
+ REDES DE COMPUTADORES 2026/1 - GRUPO 2 - FTP/FTPS
+ PROBLEMAS ENCONTRADOS E COMO RESOLVEMOS
+================================================================
+
+Esta secao registra os problemas reais enfrentados durante a montagem
+do laboratorio e como cada um foi diagnosticado e resolvido. Em varios
+casos, o aprendizado principal foi a TECNICA DE DIAGNOSTICO, e nao
+apenas a correcao em si.
+
+
+----------------------------------------------------------------
+PROBLEMA 1 - Configuracoes de rede travadas no VirtualBox
+----------------------------------------------------------------
+Sintoma:
+  Nao era possivel acessar/editar o Adapter 2 da VM nas configuracoes
+  de rede do VirtualBox.
+
+Causa:
+  A VM estava no estado "Saved" (suspensa), e nao "Powered Off".
+  Nesse estado o VirtualBox bloqueia a maioria das configuracoes.
+
+Solucao:
+  Usar o botao "Discard" para descartar o estado salvo e voltar a VM
+  para "Powered Off". Depois, o Adapter 2 ficou editavel normalmente.
+
+Aprendizado:
+  Sempre desligar a VM corretamente (sudo poweroff) em vez de fechar
+  salvando o estado.
+
+
+----------------------------------------------------------------
+PROBLEMA 2 - IP fixo nao era aplicado (continuava dinamico)
+----------------------------------------------------------------
+Sintoma:
+  Mesmo apos editar o netplan, a interface host-only continuava com
+  IP dinamico (192.168.56.101) em vez do IP fixo 192.168.56.10.
+  A saida do "ip a" mostrava a palavra "dynamic".
+
+Causa:
+  Erro de digitacao no arquivo YAML: a interface estava escrita como
+  "ensp0s8" (com um "s" a mais) em vez do nome real "enp0s8".
+  Como o nome nao correspondia a nenhuma interface real, o netplan
+  ignorava aquele bloco.
+
+Solucao:
+  Comparar o nome da interface no arquivo com o nome real exibido pelo
+  comando "ip a" e corrigir a letra. Apos "sudo netplan apply", o IP
+  192.168.56.10 foi aplicado corretamente (sem "dynamic").
+
+Aprendizado:
+  Nomes de interface sao sensiveis a cada caractere. Conferir sempre
+  o nome real com "ip a" antes de editar o netplan.
+
+
+----------------------------------------------------------------
+PROBLEMA 3 - Aviso de permissoes do netplan ("too open")
+----------------------------------------------------------------
+Sintoma:
+  Ao aplicar o netplan, aparecia o aviso:
+  "Permissions for /etc/netplan/...yaml are too open."
+
+Causa:
+  O arquivo de configuracao do netplan estava com permissoes amplas
+  demais (legivel por outros usuarios).
+
+Solucao:
+  sudo chmod 600 /etc/netplan/00-cloud-init.yaml
+
+Aprendizado:
+  Arquivos de configuracao de rede devem ser acessiveis apenas pelo
+  root (permissao 600).
+
+
+----------------------------------------------------------------
+PROBLEMA 4 - SSH recusando a senha (Permission denied)
+----------------------------------------------------------------
+Sintoma:
+  Ao conectar via SSH da maquina real para o servidor, a senha era
+  recusada repetidamente (Permission denied, please try again).
+
+Causa:
+  Confusao entre a senha do usuario do sistema (grupo2) e a senha do
+  usuario de FTP (usuarioftp). O SSH usa a do usuario do sistema.
+
+Solucao:
+  Redefinir a senha do usuario do sistema com "sudo passwd grupo2",
+  usando uma senha simples (apenas letras e numeros) para evitar
+  problemas de layout de teclado. Conexao SSH passou a funcionar.
+
+Aprendizado:
+  Distinguir claramente os dois tipos de usuario (sistema x FTP) e
+  evitar caracteres especiais em senhas de teste.
+
+
+----------------------------------------------------------------
+PROBLEMA 5 - vsftpd nao iniciava apos ativar TLS
+----------------------------------------------------------------
+Sintoma:
+  Apos adicionar o bloco de TLS, o servico falhava ao iniciar
+  (Active: failed, status=2/INVALIDARGUMENT).
+
+Causa:
+  Erro de digitacao no nome de uma opcao: estava "ssl_tlsv1_2"
+  (que nao existe no vsftpd). O nome correto e "ssl_tlsv1".
+
+Diagnostico:
+  Rodamos o vsftpd em primeiro plano com:
+      sudo vsftpd /etc/vsftpd.conf
+  que mostrou a mensagem exata:
+      500 OOPS: unrecognised variable in config file: ssl_tlsv1_2
+
+Solucao:
+  Corrigir "ssl_tlsv1_2" para "ssl_tlsv1" e reiniciar o servico.
+
+Aprendizado:
+  O comando "vsftpd <arquivo>" em primeiro plano e a melhor forma de
+  descobrir o erro exato de configuracao, pois o "systemctl status"
+  nao mostra esse detalhe.
+
+
+----------------------------------------------------------------
+PROBLEMA 6 - "could not bind listening IPv6 socket"
+----------------------------------------------------------------
+Sintoma:
+  Ao testar o vsftpd em primeiro plano apos a correcao anterior,
+  aparecia: 500 OOPS: could not bind listening IPv6 socket.
+
+Causa:
+  Conflito de socket: o servico do systemd ja estava ocupando a porta,
+  e a instancia manual tentava amarrar no mesmo socket.
+
+Solucao:
+  Nao subir o vsftpd manualmente para producao; usar o servico:
+      sudo systemctl restart vsftpd
+  O systemd gerencia o socket corretamente e o erro desaparece.
+
+Aprendizado:
+  O teste manual serve apenas para depurar a configuracao. Para
+  operar, sempre usar o servico (systemctl).
+
+
+----------------------------------------------------------------
+PROBLEMA 7 - Canal de dados do FTPS falhava (Connection refused)
+----------------------------------------------------------------
+Sintoma:
+  O login FTPS funcionava (OK LOGIN nos logs), mas o comando "ls"
+  travava com "Connection refused" / "Delaying before reconnect".
+
+Causa:
+  Outro erro de digitacao no vsftpd.conf: a opcao da porta passiva
+  estava escrita como "asv_min_port" (faltando o "p") em vez de
+  "pasv_min_port". Sem a porta minima do range, o canal de dados
+  (modo passivo) nao abria.
+
+Solucao:
+  Revisar o arquivo inteiro com calma, conferindo cada nome de opcao,
+  e corrigir para "pasv_min_port=40000". Tambem foi adicionado
+  "pasv_address=192.168.56.10" para o servidor anunciar o IP correto
+  no modo passivo.
+
+Aprendizado:
+  No FTPS sobre modo passivo, o servidor precisa anunciar o endereco
+  certo (pasv_address) e a faixa de portas precisa estar correta e
+  acessivel, senao o canal de dados falha mesmo com o login OK.
+
+
+----------------------------------------------------------------
+PROBLEMA 8 - Cliente tentava a porta 990 (FTPS implicito)
+----------------------------------------------------------------
+Sintoma:
+  Mesmo com o servidor correto, o lftp tentava conectar na porta 990
+  e levava "Connection refused".
+
+Diagnostico:
+  Ativamos o modo debug do cliente:
+      debug 3
+  que mostrou:
+      Connecting to 192.168.56.10 port 990
+      Socket error (Connection refused)
+
+Causa:
+  O prefixo "ftps://" no lftp assume FTPS IMPLICITO (porta 990).
+  Nosso servidor usa FTPS EXPLICITO (porta 21, com comando AUTH TLS).
+
+Solucao:
+  Conectar com "ftp://" (porta 21) e forcar o modo explicito:
+      lftp -u usuarioftp ftp://192.168.56.10
+      set ssl:verify-certificate no
+      set ftp:ssl-protect-data true
+      set ftp:ssl-force true
+      ls
+  A listagem funcionou e todo o trafego ficou criptografado.
+
+Aprendizado:
+  Diferenca pratica entre FTPS implicito (porta 990) e explicito
+  (porta 21 + AUTH TLS) - exatamente um dos pontos teoricos do tema.
+
+
+----------------------------------------------------------------
+PROBLEMA 9 - Transferir arquivos da VM para a maquina real
+----------------------------------------------------------------
+Sintoma:
+  A pasta compartilhada nao aparecia / dava "Permission denied" ao
+  copiar o arquivo .pcapng para ela. Alem disso, o arquivo tinha
+  extensao .pcapng (e nao .pcap como esperado) e estava em
+  ~/Pictures/Screenshots.
+
+Causa:
+  (a) A mudanca de grupo "vboxsf" so vale apos reiniciar a VM.
+  (b) O nome/caminho do arquivo estava diferente do digitado.
+
+Solucao:
+  Reiniciar a VM (para valer a permissao do grupo vboxsf) e copiar
+  usando o caminho e extensao corretos:
+      cp ~/Pictures/Screenshots/captura-ftp-inseguro.pcapng \
+         /media/sf_compartilhada/
+
+Aprendizado:
+  Mudancas de grupo de usuario exigem novo login/reboot. Sempre
+  conferir nome e caminho reais do arquivo antes de copiar.
